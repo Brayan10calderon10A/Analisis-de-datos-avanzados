@@ -1,0 +1,158 @@
+---
+title: "Taller 1 - Análisis Avanzado de Datos"
+author: "Juan Sebastián Cortés Sánchez"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Problema**. El conjunto de datos taller1.txt contiene la información del perfíl genómico de un conjunto de 1200 líneas celulares. Para estas se busca determinar cuáles de los 5000 genes (ubicados en cada columna) son de relevancia para la predicción de la variable respuesta (efectividad del tratamiento anticancer, medida como variable continua). Responda las siguientes preguntas:
+
+```{r libraries, echo=FALSE}
+suppressPackageStartupMessages({
+library(readr)
+library(caTools)
+library(glmnet)
+})
+```
+
+```{r, eval = FALSE}
+library(readr)
+library(caTools)
+library(glmnet)
+```
+
+```{r}
+taller1 <- read.csv("D:/Documentos/Educacion/Maestria/Ciencia de Datos/Analisis Avanzado/taller1.txt")
+```
+
+  1. ¿Hay multicolinealidad en los datos? Explique sucintamente.
+  
+  2. Separe aleatoriamente (pero guarde la semilla) su conjunto de datos en dos partes.
+  
+  - Entrenamiento: 1000 líneas celulares.
+  
+  - Prueba: 200 líneas celulares
+  
+```{r}
+# Fijando la semilla
+set.seed(123)
+
+# Separando los datos en entrenamiento y prueba
+sample <- sample.split(taller1$y, SplitRatio = 1000/1200)
+train  <- subset(taller1, sample == TRUE)
+test   <- subset(taller1, sample == FALSE)
+```
+  
+  3. Usando los 1000 datos de entrenamiento, determine los valores de $\lambda_r$ y $\lambda_l$ de regresión ridge y lasso, respectivamente, que minimicen el error cuadrático medio (ECM) mediante validación externa. Utilice el método de validación externa que considere más apropiado.
+  
+```{r}
+# Definir la variable objetivo
+y <- train$y
+y_test <- test$y
+
+# Definir la matriz de variables predictoras
+x <- data.matrix(train[,2:5001])
+x_test <- data.matrix(test[,2:5001])
+```
+  
+#### Regresión Ridge  
+
+```{r}
+# Entrenar modelo usando k-fold cross-validation con k=10
+cv_model_ridge <- cv.glmnet(x, y, alpha = 0)
+```
+  
+```{r}
+best_lambda_ridge <- cv_model_ridge$lambda.min
+best_lambda_ridge
+```
+  
+```{r}
+plot(cv_model_ridge)
+```
+  
+#### Regresión Lasso
+
+```{r}
+# Entrenar modelo usando k-fold cross-validation con k=10
+cv_model_lasso <- cv.glmnet(x, y, alpha = 1)
+```
+
+  
+```{r}
+best_lambda_lasso <- cv_model_lasso$lambda.min
+best_lambda_lasso
+```  
+
+```{r}
+plot(cv_model_lasso)
+```
+  
+  4. Ajuste la regresión ridge y lasso con los valores estimados de $\lambda_r$ y $\lambda_l$ obtenidos en (3) usando los 1000 datos de entrenamiento.
+  
+#### Regresión Ridge 
+
+```{r}
+best_model_ridge <- glmnet(x, y, alpha = 0, lambda = best_lambda_ridge)
+```
+
+#### Regresión Lasso 
+
+```{r}
+best_model_lasso <- glmnet(x, y, alpha = 1, lambda = best_lambda_lasso)
+```
+  
+  5. Para los modelos ajustados en (4) determine el más apropiado para propositos de predicción. Considere únicamente el ECM en los 200 datos de prueba para su decisión.
+  
+#### Regresión Ridge   
+  
+```{r}
+# Use best lambda to predict test data
+ridge_pred = predict(best_model_ridge, s = best_lambda_ridge, newx = x_test) 
+
+# Calculate test MSE
+mean((ridge_pred - y_test)^2) 
+```  
+
+#### Regresión Lasso
+
+```{r}
+# Use best lambda to predict test data
+lasso_pred = predict(best_model_lasso, s = best_lambda_lasso, newx = x_test) 
+
+# Calculate test MSE
+mean((lasso_pred - y_test)^2) 
+```
+  
+  6. Ajuste el modelo seleccionado en (5) para los 1200 datos. Note que en este punto ya tiene un $\lambda$ estimado y un modelo seleccionado.
+  
+```{r}
+# Definir la variable objetivo
+y <- taller1$y
+
+# Definir la matriz de variables predictoras
+x <- data.matrix(taller1[,2:5001])
+```
+  
+```{r}
+last_model <- glmnet(x, y, alpha = 1, lambda = best_lambda_lasso)
+```
+  
+  7. Grafique las trazas de los coeficientes en función de la penalización para el modelo ajustado en (6).
+  
+```{r}
+# Display coefficients using lambda chosen by CV
+lasso_coef = predict(last_model, type = "coefficients", s = best_lambda_lasso)[1:20,] 
+
+lasso_coef
+```
+  
+```{r}
+plot(last_model, xvar = "lambda")
+```
+  
+  
+  8. En un parrafo resuma los resultados obtenidos dado el objetivo inicial del estudio.
